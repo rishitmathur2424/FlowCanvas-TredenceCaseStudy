@@ -4,7 +4,7 @@ A production-quality visual workflow builder for HR processes. Design, configure
 
 ---
 
-## Quick Start
+## How to Run 
 
 ```bash
 # 1. Install dependencies
@@ -14,8 +14,6 @@ npm install
 npm run dev
 # → http://localhost:5173
 
-# 3. Build for production
-npm run build
 ```
 
 **Requirements:** Node.js 18+, npm 9+
@@ -74,21 +72,6 @@ src/
 └── utils/
     └── index.ts                # Export/import JSON, download helper, formatDuration
 ```
-
-### Data flow
-
-```
-User interaction
-      ↓
-React Flow (onNodesChange / onEdgesChange / onConnect)
-      ↓
-Zustand store (workflowStore.ts)
-      ↓
-Components re-render via selectors
-      ↓
-validateWorkflow() runs on every render (zero-cost — pure function over store state)
-```
-
 ---
 
 ## Node Types
@@ -103,56 +86,11 @@ validateWorkflow() runs on every render (zero-cost — pure function over store 
 
 ---
 
-## Mock API (`src/api/workflowApi.ts`)
-
-Two async functions simulate network latency with `setTimeout`:
-
-### `GET /automations`
-Returns 8 available automation actions, each with an id, label, and param list:
-```ts
-getAutomations() → AutomationAction[]
-// e.g. { id: 'send_email', label: 'Send Email', params: ['to', 'subject', 'body'] }
-```
-
-### `POST /simulate`
-Accepts the current graph (nodes + edges) and returns a `SimulationResult`:
-```ts
-simulateWorkflow(nodes, edges) → SimulationResult
-// { success, duration, steps: SimulationStep[], errors: string[] }
-```
-
-The simulation engine uses **Kahn's algorithm** (topological BFS) to traverse the graph in dependency order. Nodes with multiple incoming edges (fan-in patterns) are only processed once all predecessors complete — preventing false "cycle detected" errors on valid diamond-shaped graphs.
-
----
-
-## Validation System
-
-`validateWorkflow()` in the store runs on every render as a pure function. It uses **two BFS sweeps** over the graph:
-
-1. **Forward BFS from Start** → `reachableFromStart` set
-2. **Backward BFS from all End nodes** (edges reversed) → `canReachEnd` set
-
-Each node is then classified:
-
-| `reachableFromStart` | `canReachEnd` | Result |
-|---|---|---|
-| ✅ | ✅ | Valid |
-| ✅ | ❌ | **Error** — "dead-end path, does not lead to End" |
-| ❌ | ✅ | **Error** — "not reachable from Start" |
-| ❌ | ❌ | **Error** — "completely disconnected" |
-
-Validation errors surface in three places:
-- **Toolbar badge** — shows error/warning count, dropdown with full list
-- **Node card** — red/amber ring + badge icon on affected nodes
-- **Right panel** — issues listed under the selected node's form
-- **Simulation panel** — blocks Run and shows errors upfront if any blocking issues exist
-
----
-
 ## Design Decisions
 
-### Zustand + Immer for state
-Zustand gives a lightweight global store without context boilerplate. Immer enables safe direct mutations inside reducers. History (undo/redo) is stored as a capped array of snapshots (max 50 entries).
+### React Flow for Graph UI
+-Industry-standard library for node-based UIs
+-Handles complex interactions efficiently
 
 ### Dark mode via Zustand store
 Dark mode state lives in a dedicated Zustand store (`useDarkMode.ts`) so every component that calls it shares the same atom. The `applyAndPersist()` function runs at **module load time** (before first React render) to apply the saved preference and prevent any flash of incorrect theme.
@@ -177,6 +115,11 @@ React Flow's default edges have no hover interaction. `CustomEdge.tsx` adds:
 
 ### Graph traversal correctness
 The simulation uses Kahn's algorithm (not simple BFS with a visited set) because a simple visited set incorrectly reports cycles on any diamond/fan-in shape: node A → B, node A → C, both B and C → D. When BFS dequeues D twice (from B and C), a naive implementation flags it as a cycle. Kahn's tracks in-degree and only processes a node when all predecessors are done.
+
+### UX-Driven Validation Feedback
+-Visual indicators (error, warning, success)
+-Inline validation panel
+-Prevents invalid execution
 
 ---
 
@@ -233,4 +176,4 @@ The simulation uses Kahn's algorithm (not simple BFS with a visited set) because
 | State | Zustand + Immer | 4.5 + 10.1 |
 | Styling | Tailwind CSS | 3.4 |
 | Icons | Lucide React | 0.383 |
-| IDs | nanoid | 5.0 |
+
